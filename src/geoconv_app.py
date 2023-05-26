@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Query, HTTPException #, Request
 from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 import requests
 from fastkml import kml
-from typing import List #, Optional, Dict
+from typing import List, Optional #, Dict
 #import xmltodict
 from pydantic import BaseModel, HttpUrl
 
@@ -11,27 +12,59 @@ class Coordinate(BaseModel):
     longitude: float
     latitude: float
 
+#class LineSegment(BaseModel):
+#    start: Coordinate
+#    end: Coordinate
+# with the format:
+#line_segments:
+#[{
+# start: {
+#   longitude:	121.27,
+#   latitude:	22.52}
+# end: {
+#   longitude:	121.552,
+#   latitude:	22.675
+# }, {start: {....}, end:{...}},.....]
+
+# modify to [{start: [121.27, 22.52], end: [121.552, 22.675]}, {start:[...], end:[...]}, ...]
 class LineSegment(BaseModel):
-    start: Coordinate
-    end: Coordinate
+    start: List[float]
+    end: List[float]
 
 class KmlResponse(BaseModel):
     longitude: List[float]
     latitude: List[float]
-    line_segments: List[LineSegment] #Optional[List[LineSegment]]
+    line_segments: Optional[List[LineSegment]]
+
+def generate_custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title="ODB geoconv API",
+        version="1.0.0",
+        # description="ODB geoconv API schema",
+        routes=app.routes,
+    )
+    openapi_schema["servers"] = [
+        {
+            "url": "https://api.odb.ntu.edu.tw"
+        }
+    ]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
 
 # https://fastapi.tiangolo.com/advanced/behind-a-proxy/
 app = FastAPI(root_path="/geoconv", docs_url=None)  # Disable the default Swagger UI
 
 @app.get("/geoconv/openapi.json", include_in_schema=False)
 async def custom_openapi():
-    return JSONResponse(app.openapi())
+    return JSONResponse(generate_custom_openapi()) #app.openapi()) modify to customize openapi.json
 
 @app.get("/geoconv/swagger", include_in_schema=False)
 async def custom_swagger_ui_html():
     return get_swagger_ui_html(
         openapi_url="/geoconv/openapi.json", #app.openapi_url
-        title=app.title + " - Swagger UI",
+        title= "ODB geoconv tools - Swagger UI", #app.title
     )
 
 @app.get("/geoconv/kml2json", response_model=KmlResponse)
@@ -39,6 +72,9 @@ async def kml2json(url: HttpUrl = Query(
     None,
     description="The URL of the KML file",
     example="https://raw.githubusercontent.com/cywhale/geoconv/main/test/test01.kml"
+), append: Optional[str] = Query(
+    None,
+    description="Optional: append 'line_segments' in JSON which has each line segement start/end coordinates"
 )):
     """
     Convert KML data to longitude/latitude JSON data.
@@ -49,6 +85,7 @@ async def kml2json(url: HttpUrl = Query(
     This function will fetch KML data from a URL, parse it, and convert it to longitude/latitude in JSON.
 
     - **url**: The URL of the KML file.
+    - **append**: append 'line_segments' in JSON which has each line segement start/end coordinates.
     """
     if url is None:
         raise HTTPException(status_code=400, detail="Must specify valid kml URL")
@@ -59,34 +96,53 @@ async def kml2json(url: HttpUrl = Query(
 
     k = kml.KML()
     k.from_string(response.content)
+    #print(k.to_string(prettyprint=True), flush=True)
 
     features = list(k.features())
-    placemarks = list(features[0].features())
+    placemarks = [] #list(features[0].features()) #Not work if kml had <Folder> elements
+
+    def handle_feature(feature):
+        if isinstance(feature, kml.Placemark):
+            placemarks.append(feature)
+        elif hasattr(feature, "features"):
+            for subfeature in feature.features():
+                handle_feature(subfeature)
+
+    for feature in features:
+        handle_feature(feature)
 
     line_segments = []
     for placemark in placemarks:
         coords = placemark.geometry.coords
         for i in range(len(coords) - 1):
-            line_segments.append(
-                LineSegment(
-                    start=Coordinate(longitude=coords[i][0], latitude=coords[i][1]),
-                    end=Coordinate(longitude=coords[i+1][0], latitude=coords[i+1][1]),
-                )
-            )
+            #line_segments.append(
+            #    LineSegment(
+            #        start=Coordinate(longitude=coords[i][0], latitude=coords[i][1]),
+            #        end=Coordinate(longitude=coords[i+1][0], latitude=coords[i+1][1]),
+            #    )
+            #)
+            start = [float(coords[i][0]), float(coords[i][1])]
+            end = [float(coords[i+1][0]), float(coords[i+1][1])]
+            line_segments.append(LineSegment(start=start, end=end))
+
 
     longitude = []
     latitude = []
     segments_dict = []
     for seg in line_segments:
         segments_dict.append(seg.dict())
-        longitude.append(seg.start.longitude)
-        latitude.append(seg.start.latitude)
+        longitude.append(seg.start[0]) #seg.start.longitude)
+        latitude.append(seg.start[1])  #seg.start.latitude)
 
     # add the last end coordinate
-    longitude.append(line_segments[-1].end.longitude)
-    latitude.append(line_segments[-1].end.latitude)
-    return {
-        'longitude': longitude, #[seg.start.longitude for seg in line_segments] + [line_segments[-1].end.longitude],
-        'latitude': latitude, #[seg.start.latitude for seg in line_segments] + [line_segments[-1].end.latitude],
-        'line_segments': segments_dict #[seg.dict() for seg in line_segments]
+    longitude.append(line_segments[-1].end[0]) #.longitude)
+    latitude.append(line_segments[-1].end[1])  #.latitude)
+
+    response = {
+      'longitude': longitude,
+      'latitude': latitude
     }
+    if append == 'line_segments':
+        response['line_segments'] = segments_dict
+
+    return JSONResponse(content=response)
