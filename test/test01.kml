@@ -4,21 +4,21 @@
     <Placemark>
       <LineString>
         <coordinates>
-          122.364383,37.824664,0 122.474152,37.724322,0
+          122.364383,25.024664,0 122.474152,24.824322,0
         </coordinates>
       </LineString>
     </Placemark>
     <Placemark>
       <LineString>
         <coordinates>
-          122.474152,37.724322,0 122.563969,37.624113,0
+          122.474152,24.824322,0 122.563969,24.724113,0
         </coordinates>
       </LineString>
     </Placemark>
     <Placemark>
       <LineString>
         <coordinates>
-          122.563969,37.624113,0 122.663783,37.523917,0
+          122.563969,24.724113,0 122.663783,24.623917,0
         </coordinates>
       </LineString>
     </Placemark>
