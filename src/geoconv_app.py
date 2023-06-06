@@ -1,12 +1,15 @@
-from fastapi import FastAPI, Query, HTTPException #, Request
+from fastapi import FastAPI, Query #HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse
-import requests
+from fastapi.responses import JSONResponse, FileResponse
+import requests, base64, json, itertools
 from fastkml import kml
+from matplotlib import pyplot as plt
+from io import BytesIO
 from typing import List, Optional #, Dict
 #import xmltodict
 from pydantic import BaseModel, HttpUrl
+from tempfile import NamedTemporaryFile
 
 class Coordinate(BaseModel):
     longitude: float
@@ -146,3 +149,70 @@ async def kml2json(url: HttpUrl = Query(
         response['line_segments'] = segments_dict
 
     return JSONResponse(content=response)
+
+@app.get("/geoconv/zprofile")
+async def zprofile(zdata: str = Query(
+    None,
+    description="A valid URL for JSON source or a JSON string that contains longitude, latitude, and z keys"
+)):
+    """
+    Convert longitude/latitude/z data to z-profile image.
+
+    ## Path
+    `GET /geoconv/zprofile/`
+
+    This endpoint returns an image as a binary file response. The image is a PNG file, 
+    and it is delivered as a stream of bytes.
+
+    - **zdata**: An URL or JSON string.
+    """
+    try:
+        json_resp = requests.get(zdata)
+        json_resp.raise_for_status()
+        data = json_resp.json()
+    except (requests.HTTPError, ValueError, json.JSONDecodeError) as e:
+        try:
+            data = json.loads(zdata)
+        except (ValueError, json.JSONDecodeError):
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
+                                content={"Error": "Input zdata must be a valid URL or a JSON string."})
+
+        # Validate the JSON has 'longitude' and 'latitude' keys
+        if 'longitude' not in data or 'latitude' not in data or 'z' not in data:
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
+                                content={"Error": "Input zdata must include longitude/latitude/z keys and array of data."})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"Error": str(e)})
+
+    # Extract z values and normalize
+    z = data["z"]
+    #z_min = min(z)
+    #z_max = max(z)
+    #z_normalized = [(val - z_min) / (z_max - z_min) for val in z]
+    plt.figure(figsize=(10, 5))
+
+    if 'distance' in data:
+        distances = data["distance"]
+        # Calculate cumulative distances
+        cumulative_distances = list(itertools.accumulate(distances))
+        plt.plot(cumulative_distances, z)
+        plt.xlabel("Distance (km)")
+    else:
+        plt.plot(z)
+        plt.xlabel("Index")
+
+    plt.title("Z-profile")
+    plt.ylabel("Elevation (m)")
+
+    # Save plot to a bytes buffer
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)  # Yes, it's required to reset the cursor to the beginning of the buffer.
+
+    # Write the image data to a temporary file
+    with NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+        temp_file.write(buf.read())
+        temp_file_name = temp_file.name
+
+    # Return the image as a file response
+    return FileResponse(temp_file_name, media_type="image/png")
