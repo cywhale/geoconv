@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query #HTTPException, Request
+from fastapi import FastAPI, Query, Body #HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, FileResponse
@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from io import BytesIO
 from typing import List, Optional #, Dict
 #import xmltodict
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, Field
 from tempfile import NamedTemporaryFile
 
 class Coordinate(BaseModel):
@@ -150,22 +150,7 @@ async def kml2json(url: HttpUrl = Query(
 
     return JSONResponse(content=response)
 
-@app.get("/geoconv/zprofile")
-async def zprofile(zdata: str = Query(
-    None,
-    description="A valid URL for JSON source or a JSON string that contains longitude, latitude, and z keys"
-)):
-    """
-    Convert longitude/latitude/z data to z-profile image.
-
-    ## Path
-    `GET /geoconv/zprofile/`
-
-    This endpoint returns an image as a binary file response. The image is a PNG file, 
-    and it is delivered as a stream of bytes.
-
-    - **zdata**: An URL or JSON string.
-    """
+def zprof2img(zdata):
     try:
         json_resp = requests.get(zdata)
         json_resp.raise_for_status()
@@ -216,3 +201,41 @@ async def zprofile(zdata: str = Query(
 
     # Return the image as a file response
     return FileResponse(temp_file_name, media_type="image/png")
+
+
+@app.get("/geoconv/zprofile")
+async def zprofile(zdata: str = Query(
+    None,
+    description="A valid URL for JSON source or a JSON string that contains longitude, latitude, and z keys"
+)):
+    """
+    Get z-profile image from longitude/latitude/z data.
+
+    ## Path
+    `GET /geoconv/zprofile/`
+
+    This endpoint returns an image as a binary file response. The image is a PNG file, 
+    and it is delivered as a stream of bytes.
+
+    - **zdata**: An URL or JSON string.
+    """
+    return zprof2img(zdata)
+
+class ZprofBody(BaseModel):
+    zdata: str = Field(None, description="A valid URL for JSON source or a JSON string that contains longitude, latitude, and z keys")
+
+@app.post("/geoconv/zprofile")
+async def zprof_post(body: ZprofBody = Body(...)):
+    """
+    POST longitude/latitude/z data to get z-profile image.
+
+    ## Path
+    `POST /geoconv/zprofile/`
+
+    This endpoint returns an image as a binary file response. The image is a PNG file, 
+    and it is delivered as a stream of bytes.
+
+    - **zdata**: An URL or JSON string.
+    """
+    return zprof2img(body.zdata)
+

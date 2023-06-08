@@ -1,7 +1,7 @@
 module.exports = {
   apps : [{
     name: 'geoconv',
-    script: 'gunicorn src.geoconv_app:app -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8015 --keyfile conf/privkey.pem --certfile conf/fullchain.pem --reload',
+    script: 'gunicorn src.geoconv_app:app -w 2 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8015 --keyfile conf/privkey.pem --certfile conf/fullchain.pem --reload',
     args: '',
     merge_logs: true,
     autorestart: true,

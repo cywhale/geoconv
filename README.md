@@ -1,7 +1,7 @@
 # geoconv
 
   1. Convert KML data to longitude/latitude JSON data.
-  2. Generate a z-profile image from GEBCO API (not yet).
+  2. Generate a z-profile image from GEBCO API.
 
 #### Usage
 
