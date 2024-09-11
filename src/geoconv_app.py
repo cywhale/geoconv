@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Query, Body #HTTPException, Request
+from fastapi import FastAPI, Query, Body, status #HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, FileResponse
+from contextlib import asynccontextmanager
 import requests, base64, json, itertools
 from fastkml import kml
 from matplotlib import pyplot as plt
@@ -10,6 +11,7 @@ from typing import List, Optional #, Dict
 #import xmltodict
 from pydantic import BaseModel, HttpUrl, Field
 from tempfile import NamedTemporaryFile
+import uvicorn
 
 class Coordinate(BaseModel):
     longitude: float
@@ -56,8 +58,15 @@ def generate_custom_openapi():
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Geoconv App start...")
+    yield
+    # below code to execute when app is shutting down
+    print("Geoconv App ended")
+
 # https://fastapi.tiangolo.com/advanced/behind-a-proxy/
-app = FastAPI(root_path="/geoconv", docs_url=None)  # Disable the default Swagger UI
+app = FastAPI(root_path="/geoconv", lifespan=lifespan, docs_url=None)  # Disable the default Swagger UI
 
 @app.get("/geoconv/openapi.json", include_in_schema=False)
 async def custom_openapi():
@@ -74,7 +83,7 @@ async def custom_swagger_ui_html():
 async def kml2json(url: HttpUrl = Query(
     None,
     description="The URL of the KML file",
-    example="https://raw.githubusercontent.com/cywhale/geoconv/main/test/test01.kml"
+    examples="https://raw.githubusercontent.com/cywhale/geoconv/main/test/test01.kml"
 ), append: Optional[str] = Query(
     None,
     description="Optional: append 'line_segments' in JSON which has each line segement start/end coordinates"
@@ -99,7 +108,7 @@ async def kml2json(url: HttpUrl = Query(
 
     k = kml.KML()
     k.from_string(response.content)
-    #print(k.to_string(prettyprint=True), flush=True)
+    print(k.to_string(prettyprint=True), flush=True)
 
     features = list(k.features())
     placemarks = [] #list(features[0].features()) #Not work if kml had <Folder> elements
@@ -239,3 +248,8 @@ async def zprof_post(body: ZprofBody = Body(...)):
     """
     return zprof2img(body.zdata)
 
+def main():
+    uvicorn.run("src.geoconv_app:app", host="127.0.0.1", port=8015, log_level="info")
+
+if __name__ == "__main__":
+    main()
