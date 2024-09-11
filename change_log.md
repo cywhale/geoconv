@@ -6,4 +6,4 @@
 
 #### ver 0.0.4 add POST method for /geoconv/zprofile
 
-#### ver 0.0.5 a temporary version/upgrading version and try debugging not break down
+#### ver 0.0.5 remove rootpath in fastapi which is deprecated

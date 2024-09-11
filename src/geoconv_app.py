@@ -11,7 +11,7 @@ from typing import List, Optional #, Dict
 #import xmltodict
 from pydantic import BaseModel, HttpUrl, Field
 from tempfile import NamedTemporaryFile
-import uvicorn
+#import uvicorn
 
 class Coordinate(BaseModel):
     longitude: float
@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
     print("Geoconv App ended")
 
 # https://fastapi.tiangolo.com/advanced/behind-a-proxy/
-app = FastAPI(root_path="/geoconv", lifespan=lifespan, docs_url=None)  # Disable the default Swagger UI
+app = FastAPI(lifespan=lifespan, docs_url=None)  # Disable the default Swagger UI
 
 @app.get("/geoconv/openapi.json", include_in_schema=False)
 async def custom_openapi():
@@ -108,7 +108,7 @@ async def kml2json(url: HttpUrl = Query(
 
     k = kml.KML()
     k.from_string(response.content)
-    print(k.to_string(prettyprint=True), flush=True)
+    #print(k.to_string(prettyprint=True), flush=True)
 
     features = list(k.features())
     placemarks = [] #list(features[0].features()) #Not work if kml had <Folder> elements
@@ -247,9 +247,3 @@ async def zprof_post(body: ZprofBody = Body(...)):
     - **zdata**: An URL or JSON string.
     """
     return zprof2img(body.zdata)
-
-def main():
-    uvicorn.run("src.geoconv_app:app", host="127.0.0.1", port=8015, log_level="info")
-
-if __name__ == "__main__":
-    main()
