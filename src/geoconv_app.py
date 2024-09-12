@@ -83,7 +83,7 @@ async def custom_swagger_ui_html():
 async def kml2json(url: HttpUrl = Query(
     None,
     description="The URL of the KML file",
-    examples="https://raw.githubusercontent.com/cywhale/geoconv/main/test/test01.kml"
+    example="https://raw.githubusercontent.com/cywhale/geoconv/main/test/test01.kml"
 ), append: Optional[str] = Query(
     None,
     description="Optional: append 'line_segments' in JSON which has each line segement start/end coordinates"
